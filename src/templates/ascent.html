@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ascent - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a></div>
+    <h1>Ascent</h1>
+    <div class="sub">A conservative forecast of your PP and global rank, session by session. Only sessions with at least a few serious (non-spoof) plays count toward it - the trend is dampened on purpose, so beating it is a real but attainable win.</div>
+
+    <div id="not-eligible" class="card" style="display:none">
+      <h2>Not enough data yet</h2>
+      <div class="sub" id="eligibility-text" style="margin-bottom:10px"></div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="eligibility-fill" style="width:0%"></div></div>
+    </div>
+
+    <div id="eligible-content" style="display:none">
+      <div class="tiles">
+        <div class="tile"><div class="label">Qualifying sessions</div><div class="value" id="tile-qualifying">-</div></div>
+        <div class="tile"><div class="label">Next session - predicted PP</div><div class="value" id="tile-next-pp">-</div></div>
+        <div class="tile"><div class="label">Next session - predicted rank</div><div class="value" id="tile-next-rank">-</div></div>
+      </div>
+
+      <div class="card">
+        <h2>PP: actual vs. predicted</h2>
+        <div id="chart-pp"></div>
+      </div>
+
+      <div class="card">
+        <h2>Global rank: actual vs. predicted</h2>
+        <div id="chart-rank"></div>
+      </div>
+
+      <div class="card">
+        <h2>Sessions</h2>
+        <table id="table-points">
+          <thead><tr><th>Started</th><th>PP</th><th>vs. predicted</th><th>Rank</th><th>vs. predicted</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/live-switch.js"></script>
+<script>
+function fmtPP(v) { return v == null ? "-" : v.toFixed(0) + "pp"; }
+function fmtRank(v) { return v == null ? "-" : "#" + Math.round(v).toLocaleString(); }
+
+function renderPointsTable(tbody, points) {
+  tbody.innerHTML = "";
+  if (!points.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No sessions yet.</td></tr>';
+    return;
+  }
+  [...points].reverse().forEach(p => {
+    const ppBadge = p.predicted_pp == null ? "-" :
+      p.beat_pp_prediction ? '<span class="best-badge">Beat forecast</span>' : `<span class="sub">missed (${fmtPP(p.predicted_pp)})</span>`;
+    const rankBadge = p.predicted_rank == null ? "-" :
+      p.beat_rank_prediction ? '<span class="best-badge">Beat forecast</span>' : `<span class="sub">missed (${fmtRank(p.predicted_rank)})</span>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="primary"><a href="/game-session/${p.game_session_id}" style="color:var(--series-1)">${p.started_at}</a></td>
+      <td>${fmtPP(p.actual_pp)}</td>
+      <td>${ppBadge}</td>
+      <td>${fmtRank(p.actual_rank)}</td>
+      <td>${rankBadge}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function load() {
+  const res = await fetch("/api/ascent");
+  const data = await res.json();
+
+  if (!data.eligible) {
+    document.getElementById("not-eligible").style.display = "";
+    document.getElementById("eligible-content").style.display = "none";
+    document.getElementById("eligibility-text").textContent =
+      `${data.qualifying_sessions} of ${data.sessions_needed} qualifying sessions recorded. ` +
+      `A session qualifies once it has at least a few complete, serious plays - keep playing to unlock the forecast.`;
+    const pct = Math.min(100, Math.round((data.qualifying_sessions / data.sessions_needed) * 100));
+    document.getElementById("eligibility-fill").style.width = pct + "%";
+    return;
+  }
+
+  document.getElementById("not-eligible").style.display = "none";
+  document.getElementById("eligible-content").style.display = "";
+
+  document.getElementById("tile-qualifying").textContent = data.qualifying_sessions;
+  document.getElementById("tile-next-pp").textContent = fmtPP(data.next_forecast?.pp);
+  document.getElementById("tile-next-rank").textContent = fmtRank(data.next_forecast?.rank);
+
+  renderForecastChart(document.getElementById("chart-pp"), data.points, {
+    actualKey: "actual_pp", predictedKey: "predicted_pp", beatKey: "beat_pp_prediction",
+    formatValue: fmtPP, invert: false,
+  });
+  renderForecastChart(document.getElementById("chart-rank"), data.points, {
+    actualKey: "actual_rank", predictedKey: "predicted_rank", beatKey: "beat_rank_prediction",
+    formatValue: fmtRank, invert: true,
+  });
+
+  renderPointsTable(document.querySelector("#table-points tbody"), data.points);
+}
+
+load();
+setInterval(load, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session History - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <h1>Session history</h1>
+    <div class="sub">Every game session (osu! open to close) recorded so far. Export the current session with the button below, or an older one from the list.</div>
+
+    <div class="button-row">
+      <button class="btn" id="export-current-btn" onclick="exportCurrentSession()">Export current session</button>
+      <button class="btn" onclick="document.querySelector('#import-file').click()">Import session</button>
+      <input type="file" id="import-file" accept="application/json" style="display:none">
+    </div>
+
+    <div class="card">
+      <table id="table-sessions">
+        <thead><tr><th></th><th>Name</th><th>Started</th><th>Ended</th><th>Maps played</th><th>Misses</th><th>Ending PP</th><th>Ending rank</th><th></th><th></th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="/static/live-switch.js"></script>
+<script>
+const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`;
+const EXPORT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+const EDIT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`;
+
+async function renameSession(id, currentName) {
+  const name = prompt("Rename this session:", currentName || "");
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === currentName) return;
+  const res = await fetch(`/api/game-session/${id}/name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: trimmed }),
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    alert(result.error || "Rename failed.");
+    return;
+  }
+  load();
+}
+
+let allSessions = [];
+
+async function deleteSession(id) {
+  if (!confirm("Delete this entire game session, including every play and miss recorded in it? This can't be undone.")) return;
+  await fetch(`/api/game-session/${id}`, { method: "DELETE" });
+  load();
+}
+
+function exportSession(id) {
+  window.location.href = `/api/game-session/${id}/export`;
+}
+
+function exportCurrentSession() {
+  // allSessions is ordered newest-first (see /api/sessions), so [0] is the
+  // current/most recent session, running or not.
+  if (!allSessions.length) {
+    alert("No sessions recorded yet.");
+    return;
+  }
+  exportSession(allSessions[0].id);
+}
+
+async function importSession(file) {
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    alert("That file isn't valid JSON.");
+    return;
+  }
+  const res = await fetch("/api/game-session/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    alert(result.error || "Import failed.");
+    return;
+  }
+  load();
+}
+
+document.querySelector("#import-file").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) importSession(file);
+  e.target.value = "";
+});
+
+function renderTable(tbody, sessions) {
+  tbody.innerHTML = "";
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty">No sessions recorded yet.</td></tr>';
+    return;
+  }
+  sessions.forEach(s => {
+    const tr = document.createElement("tr");
+    const safeName = (s.name ?? "").replace(/'/g, "\\'");
+    const collage = (s.thumb_beatmap_ids || []).length
+      ? `<div class="session-collage">${s.thumb_beatmap_ids.map(id => `<img src="/beatmap-image/${id}" onerror="this.style.display='none'">`).join("")}</div>`
+      : `<span class="session-collage-empty"></span>`;
+    tr.innerHTML = `
+      <td>${collage}</td>
+      <td class="primary">${s.name ?? "-"}</td>
+      <td><a href="/game-session/${s.id}" style="color:var(--series-1)">${s.started_at}</a></td>
+      <td>${s.ended_at ?? "still running"}</td>
+      <td>${s.play_count}</td>
+      <td>${s.miss_count}</td>
+      <td>${s.ending_pp != null ? s.ending_pp.toFixed(0) : "-"}</td>
+      <td>${s.ending_rank_global != null ? "#" + s.ending_rank_global.toLocaleString() : "-"}</td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Rename this session" onclick="renameSession(${s.id}, '${safeName}')">${EDIT_ICON}</button>
+      </td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Export this session" onclick="exportSession(${s.id})">${EXPORT_ICON}</button>
+      </td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Delete this session" onclick="deleteSession(${s.id})">${TRASH_ICON}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function load() {
+  const res = await fetch("/api/sessions");
+  allSessions = await res.json();
+  renderTable(document.querySelector("#table-sessions tbody"), allSessions);
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

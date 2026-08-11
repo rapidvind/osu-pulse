@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Map Analytics - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <div class="title-row">
+      <img id="map-thumb" class="beatmap-thumb-lg" src="/beatmap-image/{{ beatmap_id }}" onerror="this.style.display='none'">
+      <div>
+        <h1 id="map-title">Loading map...</h1>
+        <div class="sub" id="map-sub">Stats below are per-map totals across every play.</div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Times played</div><div class="value" id="tile-plays">-</div></div>
+      <div class="tile"><div class="label">Total misses</div><div class="value" id="tile-misses">-</div></div>
+      <div class="tile"><div class="label">Avg misses / play</div><div class="value" id="tile-avg">-</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Viewing play</h2>
+      <div class="key-row">
+        <label style="width:auto">Play:</label>
+        <select id="play-selector" style="flex:1;max-width:360px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text-primary);font-size:13px"></select>
+      </div>
+      <div class="tiles" style="margin-top:14px;margin-bottom:0">
+        <div class="tile"><div class="label">Accuracy</div><div class="value" id="tile-play-accuracy">-</div></div>
+        <div class="tile"><div class="label">Max combo</div><div class="value" id="tile-play-max-combo">-</div></div>
+        <div class="tile"><div class="label">Misses this play</div><div class="value" id="tile-play-misses">-</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Note density vs judgment (selected play)</h2>
+      <div class="key-row" style="margin-bottom:12px">
+        <label style="width:auto">Show:</label>
+        <select id="density-type-selector" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text-primary);font-size:13px">
+          <option value="miss">Misses</option>
+          <option value="katu">200s (good)</option>
+          <option value="100">100s</option>
+          <option value="50">50s</option>
+        </select>
+      </div>
+      <div id="density-chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Note density vs accuracy (selected play)</h2>
+      <div id="accuracy-chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Miss count per play (attempt history)</h2>
+      <div id="chart-attempts"></div>
+    </div>
+
+    <div class="card">
+      <h2>Sessions</h2>
+      <table id="table-sessions"><thead><tr><th>Started</th><th>Misses</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/live-switch.js"></script>
+<script>
+const beatmapId = {{ beatmap_id }};
+let selectedPlayId = null; // null = follow latest play automatically
+
+function renderAttempts(container, sessions) {
+  container.innerHTML = "";
+  const ordered = [...sessions].reverse();
+  if (!ordered.length) { container.innerHTML = '<div class="empty">No plays yet.</div>'; return; }
+  const max = Math.max(...ordered.map(s => s.miss_count), 1);
+  ordered.forEach((s, i) => {
+    const pct = Math.round((s.miss_count / max) * 100);
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">Play ${i + 1}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--series-1)"></div></div>
+      <div class="bar-count">${s.miss_count}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`;
+
+async function deletePlay(playId) {
+  if (!confirm("Delete this play and its recorded misses? This can't be undone.")) return;
+  await fetch(`/api/play/${playId}`, { method: "DELETE" });
+  load();
+}
+
+function renderSessionsTable(tbody, plays) {
+  tbody.innerHTML = "";
+  if (!plays.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">No plays yet.</td></tr>';
+    return;
+  }
+  plays.forEach(s => {
+    const tr = document.createElement("tr");
+    const badge = s.is_new_best ? '<span class="best-badge">New Best</span>' : '';
+    tr.innerHTML = `
+      <td class="primary"><a href="/play/${s.id}" style="color:var(--series-1)">${s.started_at}</a> ${badge}</td>
+      <td>${s.miss_count}</td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Delete this play" onclick="deletePlay(${s.id})">${TRASH_ICON}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderPlaySelector(select, plays, selectedId) {
+  const wasFocused = document.activeElement === select;
+  if (wasFocused) return; // don't yank the dropdown out from under an open selection
+  select.innerHTML = plays.map(p =>
+    `<option value="${p.id}" ${p.id === selectedId ? "selected" : ""}>${p.started_at} - ${p.miss_count} misses${p.is_new_best ? " (New Best)" : ""}</option>`
+  ).join("");
+}
+
+let lastData = null;
+
+function renderSelectedDensityChart() {
+  if (!lastData) return;
+  const type = document.getElementById("density-type-selector").value;
+  const container = document.getElementById("density-chart");
+  if (type === "miss") {
+    renderDensityChart(container, lastData.density, lastData.misses);
+  } else {
+    renderJudgmentDensityChart(container, lastData.density, lastData.judgments, type);
+  }
+}
+
+document.getElementById("density-type-selector").addEventListener("change", renderSelectedDensityChart);
+
+async function load() {
+  const url = selectedPlayId ? `/api/map/${beatmapId}?play_id=${selectedPlayId}` : `/api/map/${beatmapId}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  lastData = data;
+  const plays = data.plays || [];
+
+  if (plays.length) {
+    document.getElementById("map-title").textContent = plays[0].beatmap_title || "Unknown map";
+  }
+
+  document.getElementById("tile-plays").textContent = plays.length;
+  document.getElementById("tile-misses").textContent = data.total_misses;
+  document.getElementById("tile-avg").textContent = plays.length ? (data.total_misses / plays.length).toFixed(1) : "0";
+
+  const selectedPlay = plays.find(p => p.id === data.selected_play_id);
+  document.getElementById("tile-play-accuracy").textContent = selectedPlay && selectedPlay.accuracy != null ? selectedPlay.accuracy.toFixed(2) + "%" : "-";
+  document.getElementById("tile-play-max-combo").textContent = selectedPlay ? (selectedPlay.max_combo ?? "-") : "-";
+  document.getElementById("tile-play-misses").textContent = selectedPlay ? selectedPlay.miss_count : "-";
+
+  renderPlaySelector(document.getElementById("play-selector"), plays, data.selected_play_id);
+  renderSelectedDensityChart();
+  renderAccuracyChart(document.getElementById("accuracy-chart"), data.density, data.judgments);
+  renderAttempts(document.getElementById("chart-attempts"), plays);
+  renderSessionsTable(document.querySelector("#table-sessions tbody"), plays);
+}
+
+document.getElementById("play-selector").addEventListener("change", (e) => {
+  selectedPlayId = parseInt(e.target.value, 10);
+  load();
+});
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

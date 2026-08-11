@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Play Analytics - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <div class="title-row">
+      <img id="play-thumb" class="beatmap-thumb-lg" style="display:none" onerror="this.style.display='none'">
+      <div>
+        <h1 id="play-title">Loading play... <span id="best-badge"></span></h1>
+        <div class="sub" id="play-sub">Live view - refreshes every 2s while this play is in progress.</div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Accuracy</div><div class="value" id="tile-accuracy">-</div></div>
+      <div class="tile"><div class="label">Max combo</div><div class="value" id="tile-max-combo">-</div></div>
+      <div class="tile"><div class="label">Misses this play</div><div class="value" id="tile-misses">-</div></div>
+      <div class="tile"><div class="label">Best combo before a miss</div><div class="value" id="tile-best-combo">-</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Note density vs judgment (this play)</h2>
+      <div class="key-row" style="margin-bottom:12px">
+        <label style="width:auto">Show:</label>
+        <select id="density-type-selector" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text-primary);font-size:13px">
+          <option value="miss">Misses</option>
+          <option value="katu">200s (good)</option>
+          <option value="100">100s</option>
+          <option value="50">50s</option>
+        </select>
+      </div>
+      <div id="density-chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Note density vs accuracy (this play)</h2>
+      <div id="accuracy-chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Misses by finger (this play)</h2>
+      <div id="chart-finger"></div>
+    </div>
+
+    <div class="card">
+      <h2>Miss timeline</h2>
+      <table id="table-misses"><thead><tr><th>Song time</th><th>Key</th><th>Finger</th><th>Combo</th><th>Pattern</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/live-switch.js"></script>
+<script>
+const playId = {{ play_id }};
+
+function renderFingerBars(container, misses) {
+  container.innerHTML = "";
+  const counts = {};
+  FINGER_ORDER.forEach(f => counts[f] = 0);
+  misses.forEach(m => { if (m.finger) counts[m.finger] = (counts[m.finger] || 0) + 1; });
+  const max = Math.max(...Object.values(counts), 1);
+  FINGER_ORDER.forEach(f => {
+    const pct = Math.round((counts[f] / max) * 100);
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">${f}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${FINGER_COLORS[f]}"></div></div>
+      <div class="bar-count">${counts[f]}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function renderMissTable(tbody, misses) {
+  tbody.innerHTML = "";
+  if (!misses.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No misses yet.</td></tr>';
+    return;
+  }
+  [...misses].reverse().forEach(m => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${m.song_time_ms != null ? fmtTime(m.song_time_ms) : "-"}</td>
+      <td>${m.key ?? "-"}</td>
+      <td>${m.finger ?? "-"}</td>
+      <td>${m.combo_before_miss ?? "-"}</td>
+      <td>${m.pattern ?? "-"}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+let lastData = null;
+
+function renderSelectedDensityChart() {
+  if (!lastData) return;
+  const type = document.getElementById("density-type-selector").value;
+  const container = document.getElementById("density-chart");
+  if (type === "miss") {
+    renderDensityChart(container, lastData.density, lastData.misses);
+  } else {
+    renderJudgmentDensityChart(container, lastData.density, lastData.judgments, type);
+  }
+}
+
+document.getElementById("density-type-selector").addEventListener("change", renderSelectedDensityChart);
+
+async function load() {
+  const res = await fetch(`/api/play/${playId}`);
+  const data = await res.json();
+  if (!data.play) {
+    document.getElementById("play-title").textContent = "Play not found";
+    return;
+  }
+  lastData = data;
+
+  document.getElementById("play-title").firstChild.textContent = (data.play.beatmap_title || "Unknown map") + " ";
+  document.getElementById("best-badge").innerHTML = data.play.is_new_best ? '<span class="best-badge">New Best</span>' : '';
+  document.getElementById("play-sub").textContent = `${data.play.beatmap_version || ""} - started ${data.play.started_at}`;
+  const thumb = document.getElementById("play-thumb");
+  thumb.src = `/beatmap-image/${data.play.beatmap_id}`;
+  thumb.style.display = "block";
+  document.getElementById("tile-accuracy").textContent = data.play.accuracy != null ? data.play.accuracy.toFixed(2) + "%" : "-";
+  document.getElementById("tile-max-combo").textContent = data.play.max_combo ?? "-";
+  document.getElementById("tile-misses").textContent = data.misses.length;
+  const combos = data.misses.map(m => m.combo_before_miss).filter(c => c != null);
+  document.getElementById("tile-best-combo").textContent = combos.length ? Math.max(...combos) : "-";
+
+  renderSelectedDensityChart();
+  renderAccuracyChart(document.getElementById("accuracy-chart"), data.density, data.judgments);
+  renderFingerBars(document.getElementById("chart-finger"), data.misses);
+  renderMissTable(document.querySelector("#table-misses tbody"), data.misses);
+}
+
+load();
+setInterval(load, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game Session - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a> <a href="/ascent">Ascent</a></div>
+    <h1 id="game-session-title">Game session <button class="btn" style="padding:2px 10px;font-size:12px;vertical-align:middle" onclick="renameSession()">Rename</button></h1>
+    <div class="sub" id="game-session-sub">Every map played from osu! open to close (or until now, if still running).</div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Maps played</div><div class="value" id="tile-plays">-</div></div>
+      <div class="tile"><div class="label">Total misses</div><div class="value" id="tile-misses">-</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Misses per map, in play order</h2>
+      <div id="chart-plays"></div>
+    </div>
+
+    <div class="card">
+      <h2>Maps played this session</h2>
+      <table id="table-plays"><thead><tr><th>Started</th><th>Map</th><th>Difficulty</th><th>Misses</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/live-switch.js"></script>
+<script>
+const gameSessionId = {{ game_session_id }};
+
+function renderPlaysChart(container, plays) {
+  container.innerHTML = "";
+  if (!plays.length) { container.innerHTML = '<div class="empty">No plays yet.</div>'; return; }
+  const max = Math.max(...plays.map(p => p.miss_count), 1);
+  plays.forEach((p, i) => {
+    const pct = Math.round((p.miss_count / max) * 100);
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">${i + 1}. ${(p.beatmap_title || "Unknown").slice(0, 14)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--series-1)"></div></div>
+      <div class="bar-count">${p.miss_count}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`;
+
+let currentSessionName = "";
+
+async function renameSession() {
+  const name = prompt("Rename this session:", currentSessionName);
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === currentSessionName) return;
+  const res = await fetch(`/api/game-session/${gameSessionId}/name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: trimmed }),
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    alert(result.error || "Rename failed.");
+    return;
+  }
+  load();
+}
+
+async function deletePlay(playId) {
+  if (!confirm("Delete this play and its recorded misses? This can't be undone.")) return;
+  await fetch(`/api/play/${playId}`, { method: "DELETE" });
+  load();
+}
+
+function renderPlaysTable(tbody, plays) {
+  tbody.innerHTML = "";
+  if (!plays.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No plays yet.</td></tr>';
+    return;
+  }
+  plays.forEach(p => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${p.started_at}</td>
+      <td class="primary">
+        <a href="/play/${p.id}" style="color:var(--series-1);text-decoration:none" class="beatmap-cell">
+          <img class="beatmap-thumb" src="/beatmap-image/${p.beatmap_id}" onerror="this.style.display='none'">
+          ${p.beatmap_title ?? "Unknown"}
+        </a>
+      </td>
+      <td>${p.beatmap_version ?? "-"}</td>
+      <td>${p.miss_count} ${p.is_new_best ? '<span class="best-badge">New Best</span>' : ''}</td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Delete this play" onclick="deletePlay(${p.id})">${TRASH_ICON}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function load() {
+  const res = await fetch(`/api/game-session/${gameSessionId}`);
+  const data = await res.json();
+  const plays = data.plays || [];
+
+  if (data.game_session) {
+    currentSessionName = data.game_session.name || "";
+    document.getElementById("game-session-title").firstChild.textContent = (currentSessionName || "Game session") + " ";
+    document.getElementById("game-session-sub").textContent =
+      `Started ${data.game_session.started_at}` + (data.game_session.ended_at ? ` - ended ${data.game_session.ended_at}` : " - still running");
+  }
+
+  document.getElementById("tile-plays").textContent = plays.length;
+  document.getElementById("tile-misses").textContent = plays.reduce((sum, p) => sum + p.miss_count, 0);
+
+  renderPlaysChart(document.getElementById("chart-plays"), plays);
+  renderPlaysTable(document.querySelector("#table-plays tbody"), plays);
+}
+
+load();
+setInterval(load, 4000);
+</script>
+</body>
+</html>

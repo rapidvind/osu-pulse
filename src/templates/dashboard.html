@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="brand-row">
+      <img src="/static/mascot.png" alt="" class="mascot-icon">
+      <h1>osu!Pulse</h1>
+    </div>
+    <div class="sub">Live-captured misses attributed to key / finger via tosu + local key hook. Refreshes every 3s.</div>
+    <div class="button-row">
+      <a id="live-link" href="#" class="btn">View live play</a>
+      <a id="game-session-link" href="#" class="btn">Current game session</a>
+      <a href="/sessions" class="btn">Session history</a>
+      <a href="/ascent" class="btn">Ascent</a>
+      <button class="btn" style="background:var(--series-8)" onclick="endSession()">End session</button>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Game sessions</div><div class="value" id="tile-game-sessions">-</div></div>
+      <div class="tile"><div class="label">Maps played</div><div class="value" id="tile-plays">-</div></div>
+      <div class="tile"><div class="label">Total misses</div><div class="value" id="tile-misses">-</div></div>
+    </div>
+
+    <div class="card-row">
+      <div class="card">
+        <h2>Misses by finger</h2>
+        <div id="chart-finger" class="col-chart"></div>
+      </div>
+
+      <div class="card">
+        <h2>Misses by key</h2>
+        <div id="chart-key" class="col-chart"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Misses by beatmap</h2>
+      <table id="table-beatmap"><thead><tr><th>Beatmap</th><th>Difficulty</th><th>Misses</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <details class="card">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600">Recent misses</summary>
+      <table id="table-recent" style="margin-top:16px"><thead><tr><th>Time</th><th>Beatmap</th><th>Key</th><th>Finger</th><th>Combo</th></tr></thead><tbody></tbody></table>
+    </details>
+
+    <details class="card">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600">Key settings</summary>
+      <div class="sub" style="margin-top:12px">
+        Must match your actual in-game osu!mania keybinds (Options &gt; Input &gt; osu!mania Bindings).
+        Order matters — left to right here should match column 1 to 4 in-game. Takes effect immediately, no restart needed.
+      </div>
+      <div id="key-settings-rows"></div>
+      <div class="button-row" style="margin-top:4px;margin-bottom:0">
+        <button class="btn" onclick="saveKeySettings()">Save</button>
+      </div>
+      <div id="key-settings-message" style="font-size:13px;margin-top:10px"></div>
+    </details>
+  </div>
+</div>
+
+<div id="welcome-overlay" class="welcome-overlay" onclick="if (event.target === this) closeWelcome()">
+  <div class="welcome-card">
+    <img src="/static/mascot.png" alt="" class="welcome-mascot">
+    <div class="welcome-text">Ready to click those circles?</div>
+    <div class="sub" id="welcome-session-name" style="margin-bottom:16px"></div>
+    <button class="btn" onclick="closeWelcome()">Let's go</button>
+  </div>
+</div>
+
+<script src="/static/live-switch.js"></script>
+<script>
+function closeWelcome() {
+  document.getElementById("welcome-overlay")?.remove();
+}
+
+async function loadWelcomeSessionName() {
+  const el = document.getElementById("welcome-session-name");
+  if (!el) return; // overlay already dismissed
+  try {
+    const res = await fetch("/api/live-game-session");
+    const data = await res.json();
+    if (data.game_session && data.game_session.name) {
+      el.textContent = `This session: ${data.game_session.name}`;
+    } else {
+      // tosu's websocket hasn't connected yet - the session row doesn't
+      // exist until then, so keep polling while the overlay is still up
+      setTimeout(loadWelcomeSessionName, 1000);
+    }
+  } catch (e) {
+    setTimeout(loadWelcomeSessionName, 1000);
+  }
+}
+loadWelcomeSessionName();
+</script>
+
+<script>
+const COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)"];
+
+function renderBarChart(el, rows, labelKey, countKey) {
+  el.innerHTML = "";
+  if (!rows.length) { el.innerHTML = '<div class="empty">No misses logged yet.</div>'; return; }
+  const maxBarHeight = 120;
+  const max = Math.max(...rows.map(r => r[countKey]), 1);
+  rows.forEach((r, i) => {
+    const wrap = document.createElement("div");
+    wrap.className = "col-bar-wrap";
+    const px = Math.max(Math.round((r[countKey] / max) * maxBarHeight), 2);
+    wrap.innerHTML = `
+      <div class="col-bar-count">${r[countKey]}</div>
+      <div class="col-bar" style="height:${px}px;background:${COLORS[i % COLORS.length]}"></div>
+      <div class="col-bar-label">${r[labelKey]}</div>
+    `;
+    el.appendChild(wrap);
+  });
+}
+
+function renderTable(tbody, rows, cols) {
+  tbody.innerHTML = "";
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty">No data yet.</td></tr>`;
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = cols.map((c, i) => `<td class="${i === 0 ? 'primary' : ''}">${r[c] ?? '-'}</td>`).join("");
+    tbody.appendChild(tr);
+  });
+}
+
+const TRASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`;
+
+async function deleteBeatmap(beatmapId, title) {
+  if (!confirm(`Delete all recorded plays for "${title ?? 'this beatmap'}"? This can't be undone.`)) return;
+  await fetch(`/api/beatmap/${beatmapId}`, { method: "DELETE" });
+  refresh();
+}
+
+function renderBeatmapTable(tbody, rows) {
+  tbody.innerHTML = "";
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">No data yet.</td></tr>`;
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    const safeTitle = (r.beatmap_title ?? 'Unknown').replace(/'/g, "\\'");
+    tr.innerHTML = `
+      <td class="primary">
+        <a href="/map/${r.beatmap_id}" style="color:var(--series-1);text-decoration:none" class="beatmap-cell">
+          <img class="beatmap-thumb" src="/beatmap-image/${r.beatmap_id}" onerror="this.style.display='none'">
+          ${r.beatmap_title ?? 'Unknown'}
+        </a>
+      </td>
+      <td>${r.beatmap_version ?? '-'}</td>
+      <td>${r.count}</td>
+      <td class="col-actions">
+        <button class="delete-btn" title="Delete all plays for this beatmap" onclick="deleteBeatmap(${r.beatmap_id}, '${safeTitle}')">${TRASH_ICON}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRecentTable(tbody, rows) {
+  tbody.innerHTML = "";
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">No data yet.</td></tr>`;
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.ts ?? '-'}</td>
+      <td class="primary"><a href="/play/${r.play_id}" style="color:var(--series-1)">${r.beatmap_title ?? 'Unknown'}</a></td>
+      <td>${r.key ?? '-'}</td>
+      <td>${r.finger ?? '-'}</td>
+      <td>${r.combo_before_miss ?? '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/summary");
+    const data = await res.json();
+    document.getElementById("tile-game-sessions").textContent = data.game_sessions;
+    document.getElementById("tile-plays").textContent = data.plays;
+    document.getElementById("tile-misses").textContent = data.total_misses;
+    renderBarChart(document.getElementById("chart-finger"), data.by_finger, "finger", "count");
+    renderBarChart(document.getElementById("chart-key"), data.by_key, "key", "count");
+    renderBeatmapTable(document.querySelector("#table-beatmap tbody"), data.by_beatmap);
+    renderRecentTable(document.querySelector("#table-recent tbody"), data.recent);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function refreshLiveLink() {
+  try {
+    const res = await fetch("/api/live");
+    const data = await res.json();
+    const link = document.getElementById("live-link");
+    if (data.play) {
+      link.href = `/play/${data.play.id}`;
+      link.textContent = `View live play (${data.play.beatmap_title ?? 'in progress'})`;
+      link.classList.remove("disabled");
+    } else {
+      link.textContent = "No play yet";
+      link.classList.add("disabled");
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  try {
+    const res = await fetch("/api/live-game-session");
+    const data = await res.json();
+    const link = document.getElementById("game-session-link");
+    if (data.game_session) {
+      link.href = `/game-session/${data.game_session.id}`;
+      link.textContent = `Current game session (${data.plays.length} maps played)`;
+      link.classList.remove("disabled");
+    } else {
+      link.textContent = "No game session yet";
+      link.classList.add("disabled");
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function endSession() {
+  if (!confirm("End this session? This stops the key hook, tosu (if this app started it), and the dashboard server itself. You'll need to relaunch the app to start again.")) return;
+  try {
+    await fetch("/api/shutdown", { method: "POST" });
+  } catch (e) {
+    // expected - the server closes the connection as part of shutting down
+  }
+  document.body.innerHTML = '<div class="wrap"><h1>Session ended</h1><div class="sub">The app has stopped. You can close this tab.</div></div>';
+}
+
+function renderKeySettings(mapping) {
+  const container = document.getElementById("key-settings-rows");
+  container.innerHTML = "";
+  Object.entries(mapping).forEach(([key, finger], i) => {
+    const row = document.createElement("div");
+    row.className = "key-row";
+    row.innerHTML = `
+      <label>Column ${i + 1}</label>
+      <input class="key-input" data-role="key" value="${key}" maxlength="12">
+      <input class="finger-input" data-role="finger" value="${finger}" maxlength="24">
+    `;
+    container.appendChild(row);
+  });
+}
+
+async function loadKeySettings() {
+  try {
+    const res = await fetch("/api/settings/keys");
+    const data = await res.json();
+    renderKeySettings(data.key_to_finger);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function saveKeySettings() {
+  const rows = document.querySelectorAll("#key-settings-rows .key-row");
+  const mapping = {};
+  rows.forEach(row => {
+    const key = row.querySelector('[data-role="key"]').value.trim();
+    const finger = row.querySelector('[data-role="finger"]').value.trim();
+    if (key && finger) mapping[key] = finger;
+  });
+
+  const msg = document.getElementById("key-settings-message");
+  msg.textContent = "Saving...";
+  msg.style.color = "var(--text-secondary)";
+
+  try {
+    const res = await fetch("/api/settings/keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key_to_finger: mapping }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || "Could not save key settings.";
+      msg.style.color = "var(--series-8)";
+      return;
+    }
+    renderKeySettings(data.key_to_finger);
+    msg.textContent = "Saved — takes effect immediately.";
+    msg.style.color = "var(--series-6)";
+  } catch (e) {
+    msg.textContent = "Could not reach the server.";
+    msg.style.color = "var(--series-8)";
+  }
+}
+
+refresh();
+refreshLiveLink();
+loadKeySettings();
+setInterval(refresh, 3000);
+setInterval(refreshLiveLink, 3000);
+</script>
+</body>
+</html>

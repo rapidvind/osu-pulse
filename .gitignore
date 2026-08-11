@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+osu_analytics.db
+settings.json
+build/
+dist/
+*.spec
+
+# Third-party binary - never committed. See vendor/README.md and
+# THIRD_PARTY_NOTICES.md for why it's fetched at build time instead.
+vendor/*.exe
+vendor/*.zip
+vendor/logs/
+
+# Claude Code session data - not project content
+.claude/

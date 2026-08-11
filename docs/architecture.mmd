@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph OS["Your PC"]
+        osu["osu! client"]
+        keys["Physical keys A S ; '"]
+    end
+
+    tosu["tosu (auto-started, hidden)<br/>reads osu!'s memory"]
+    osu -->|memory read| tosu
+    tosu -->|"websocket ws://localhost:24050"| tosu_client["tosu_client.py"]
+
+    keys -->|scan-code hook| key_listener["key_listener.py<br/>rolling buffer of recent presses"]
+
+    tosu_client -->|"state, hits, combo,<br/>beatmap path, song time"| collector["collector.py"]
+    key_listener -->|"most recent key<br/>before each miss"| collector
+
+    osu_file[".osu beatmap file<br/>(note timestamps per column)"] -->|parsed once per map| beatmap_parser["beatmap_parser.py"]
+    collector -->|resolves file path| beatmap_parser
+
+    collector -->|game_session / play / miss rows| db[("SQLite<br/>osu_analytics.db")]
+
+    db --> app["app.py (Flask)"]
+    beatmap_parser -->|density curve| app
+    app -->|"dashboard, map, play,<br/>game-session pages"| browser["Your browser<br/>http://127.0.0.1:5151"]
