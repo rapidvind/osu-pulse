@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Installs only the packages src/analysis/ and its tests actually need,
+      # not the full requirements.txt - that also pulls in Windows-only /
+      # GUI-heavy packages (keyboard, pywebview, PySide6) used by the
+      # collector/overlay, which this app's own test suite doesn't exercise
+      # and which would make CI slow and platform-finicky for no benefit.
+      - name: Install test dependencies
+        run: pip install pytest scikit-learn pandas numpy flake8
+
+      - name: Lint (syntax errors / undefined names only)
+        run: flake8 src/analysis tests --select=E9,F63,F7,F82 --show-source
+
+      - name: Run tests
+        run: pytest -q
