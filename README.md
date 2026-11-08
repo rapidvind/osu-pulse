@@ -14,12 +14,23 @@ This project exists as a small, honestly-evaluated prototype of mining gameplay 
 
 ## Demo
 
-*(Screenshots/GIF placeholders — to be added)*
+**Dashboard home** — live totals, misses by finger/key, misses by beatmap:
 
-- `[Screenshot: dashboard home]`
-- `[Screenshot: /map/<id> density-vs-miss overlay]`
-- `[Screenshot: /analysis page — cluster breakdown]`
-- `[Screenshot: /analysis page — outlier plays and regression residuals]`
+![Dashboard](docs/screenshots/dashboard.jpg)
+
+**Map page** — note density vs. miss overlay for a single play:
+
+![Map density vs. miss overlay](docs/screenshots/map-density.jpg)
+
+**Analysis page** — miss clusters (recurring failure types):
+
+![Analysis - cluster breakdown](docs/screenshots/analysis-clusters.jpg)
+
+**Analysis page** — outlier plays and regression residuals:
+
+![Analysis - outliers and regression](docs/screenshots/analysis-outliers-regression.jpg)
+
+*(GIF of a live session — to be added)*
 
 ## How it works / Architecture
 
