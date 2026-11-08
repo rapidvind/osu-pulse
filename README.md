@@ -138,7 +138,9 @@ osu-analytics/
 ├── dist/                    PyInstaller output (.exe) lands here — outside src/
 ├── fetch_tosu.ps1           Downloads tosu's latest Windows release into vendor/
 ├── requirements.txt
+├── LICENSE                  This project's own code (MIT)
 ├── THIRD_PARTY_NOTICES.md
+├── THIRD_PARTY_LICENSES/    Full third-party license texts (e.g. tosu's LGPL-3.0)
 ├── osu_analytics.db         Created automatically at the project root (gitignored)
 └── settings.json             Key-to-finger mapping — created automatically (gitignored)
 ```
@@ -163,12 +165,20 @@ Once everything works via `python src/app.py`:
      --add-data "src/templates;templates" ^
      --add-data "src/static;static" ^
      --add-binary "vendor/tosu.exe;." ^
+     --add-data "THIRD_PARTY_NOTICES.md;." ^
+     --add-data "THIRD_PARTY_LICENSES;THIRD_PARTY_LICENSES" ^
      --icon "src/static/mascot.ico" ^
      src/app.py
    ```
 
-The resulting `dist/osu-pulse.exe` bundles Python, all dependencies, and tosu itself — outside `src/`. Users just run it (as Administrator, for the key hook) — no separate tosu install needed, no Python install needed.
+The resulting `dist/osu-pulse.exe` bundles Python, all dependencies, and tosu itself — outside `src/`. Users just run it (as Administrator, for the key hook) — no separate tosu install needed, no Python install needed. The `--add-data` flags above also ship `THIRD_PARTY_NOTICES.md` and tosu's bundled LGPL-3.0 license text next to the exe, so the license terms travel with the binary, not just the source repo.
 
-## Third-party credit
+## License
 
-This project bundles and auto-launches **tosu** for convenience — all credit for the live memory-reading itself belongs to its authors. Full attribution and license details (LGPL-3.0) are in `THIRD_PARTY_NOTICES.md`. This repository does not currently declare its own license — see the note in the project's accompanying discussion.
+This project's own code is **MIT-licensed** (see `LICENSE`).
+
+It bundles and auto-launches **tosu** (https://github.com/tosuapp/tosu) as a
+separate, unmodified binary for convenience — tosu is **not** covered by
+this project's MIT license and remains under its own **LGPL-3.0** terms.
+Full attribution and the bundled license text are in
+`THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES/tosu-LGPL-3.0.txt`.
