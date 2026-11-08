@@ -30,6 +30,10 @@ This project exists as a small, honestly-evaluated prototype of mining gameplay 
 
 ![Analysis - outliers and regression](docs/screenshots/analysis-outliers-regression.jpg)
 
+**In-game overlay** — the same dashboard embedded in a frameless, translucent, always-on-top window over gameplay, toggled with `Ctrl+Shift+P`:
+
+![In-game overlay over gameplay](docs/screenshots/overlay.jpg)
+
 ## How it works / Architecture
 
 tosu (https://github.com/tosuapp/tosu) reads osu!'s live memory and exposes it over a local websocket — the only way to get miss/combo/beatmap data out of osu! at all, since the game itself exposes nothing to outside programs. But tosu has no idea which physical key you pressed. So this project layers a second signal on top: a global keyboard hook that timestamps your 4 mania keys, and correlates "a miss just happened" (from tosu) with "which tracked key was pressed most recently" (from the hook) to attribute each miss to a finger.
@@ -76,6 +80,7 @@ tosu (https://github.com/tosuapp/tosu) reads osu!'s live memory and exposes it o
 - **Game session page** (`/game-session/<id>`) — every map played in one sitting, in order, with miss counts per map.
 - **Session history** (`/sessions`) — every recorded game session; export/import session data as JSON.
 - **Analysis page** (`/analysis`) — miss clusters, outlier plays, regression residuals (see below).
+- **In-game overlay** — the dashboard embedded in a frameless, translucent, always-on-top window over gameplay. Toggle with `Ctrl+Shift+P`; drag anywhere; adjust its opacity slider from inside the overlay itself.
 
 **Running tests:**
 ```
@@ -132,6 +137,7 @@ osu-pulse/
 │   ├── settings.py          Loads/saves the key-to-finger mapping (settings.json)
 │   ├── config.py            Tunables (tosu URL, miss attribution window, ports)
 │   ├── progress.py          PP/rank forecast ("Ascent" page)
+│   ├── overlay.py           In-game overlay window (pywebview), Ctrl+Shift+P
 │   ├── analysis/            Clustering / anomaly detection / regression (ML layer)
 │   │   ├── features.py      Tidy miss-level & play-level DataFrames from the DB
 │   │   ├── clustering.py    KMeans + Agglomerative miss clustering
@@ -140,9 +146,9 @@ osu-pulse/
 │   │   ├── report.py        Glues features.py into the three methods for the API
 │   │   └── synth.py         Synthetic data generator for tests only
 │   ├── templates/           Dashboard, map, play, session, analysis pages
-│   └── static/              CSS + chart rendering JS
+│   └── static/              CSS + chart rendering JS + theme.js (3 time-of-day themes)
 ├── tests/                   Unit tests for src/analysis/ (synthetic data only)
-├── docs/                    architecture.mmd / architecture.png
+├── docs/                    architecture.mmd / architecture.png / screenshots/
 ├── vendor/                  tosu.exe lands here (fetched, not committed)
 ├── dist/                    PyInstaller output (.exe) lands here — outside src/
 ├── fetch_tosu.ps1           Downloads tosu's latest Windows release into vendor/
@@ -160,6 +166,7 @@ osu-pulse/
 - **scikit-learn** (KMeans, AgglomerativeClustering, IsolationForest, RandomForestRegressor, PoissonRegressor) + **pandas** / **numpy** for the analysis layer
 - **SQLite** for storage, raw `sqlite3` (no ORM)
 - **websockets** client for tosu's live feed; a scan-code-based global keyboard hook (`keyboard`) for key attribution
+- **pywebview** (Qt/PySide6 backend) for the translucent in-game overlay window
 - **pytest** for tests; **PyInstaller** for the standalone `.exe` build
 - Vanilla JS + hand-rolled SVG/DOM charts for the dashboard (no frontend framework/build step)
 
