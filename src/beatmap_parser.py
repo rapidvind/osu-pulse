@@ -89,3 +89,98 @@ def classify_pattern(hit_objects, time_ms, column, lookback_ms=600):
     if len(window) >= 3:
         return "stream"
     return "isolated"
+
+
+_DIFFICULTY_KEYS = {
+    "CircleSize": "circle_size",
+    "OverallDifficulty": "overall_difficulty",
+    "ApproachRate": "approach_rate",
+    "HPDrainRate": "hp_drain_rate",
+}
+
+
+def parse_mania_difficulty(osu_file_path):
+    """Pulls the raw [Difficulty] section values out of a .osu file - these
+    are the same CS/OD/AR/HP numbers osu! itself shows on the song select
+    screen. Not a computed star rating (that needs the full pp calculation
+    this app doesn't implement) - just what's directly in the file. Missing
+    keys (ApproachRate didn't always exist in older beatmap formats) come
+    back as None rather than a guessed default."""
+    values = {v: None for v in _DIFFICULTY_KEYS.values()}
+    section = None
+    with open(osu_file_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("//"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                section = line[1:-1]
+                continue
+            if section != "Difficulty" or ":" not in line:
+                continue
+            key, _, raw_value = line.partition(":")
+            field = _DIFFICULTY_KEYS.get(key.strip())
+            if field is None:
+                continue
+            try:
+                values[field] = float(raw_value.strip())
+            except ValueError:
+                pass
+    return values
+
+
+def compute_pattern_mix(hit_objects, lookback_ms=600):
+    """Same jack/stream/isolated classification as classify_pattern(), but
+    computed once for every note in the map instead of one note at a time -
+    classify_pattern's per-call full-list filter is fine for a single miss
+    lookup, but re-running it per note would be O(n^2) over a whole map.
+    This keeps the same windowing logic (notes in (time_ms - lookback_ms,
+    time_ms)) via a two-pointer sweep over the time-sorted list instead.
+
+    Returns {"jack_frac": .., "stream_frac": .., "isolated_frac": ..} (each
+    a share of the map's total note count), or all-None fractions for a map
+    with fewer than 2 notes (not enough to classify anything)."""
+    if len(hit_objects) < 2:
+        return {"jack_frac": None, "stream_frac": None, "isolated_frac": None}
+
+    counts = {"jack": 0, "stream": 0, "isolated": 0}
+    left = 0
+    for i, (t, column) in enumerate(hit_objects):
+        while hit_objects[left][0] < t - lookback_ms:
+            left += 1
+        window = hit_objects[left:i]  # all have time < t by construction
+        same_column = sum(1 for _, c in window if c == column)
+        if same_column >= 2:
+            counts["jack"] += 1
+        elif len(window) >= 3:
+            counts["stream"] += 1
+        else:
+            counts["isolated"] += 1
+
+    total = len(hit_objects)
+    return {f"{k}_frac": v / total for k, v in counts.items()}
+
+
+def compute_beatmap_stats(column_count, hit_objects):
+    """Map-level descriptors independent of any particular play - the
+    "difficulty" features a regression actually needs (see
+    src/analysis/regression.py's docstring), as opposed to the per-miss
+    pattern label classify_pattern() produces. Returns None if the map has
+    no parseable hit objects at all."""
+    if not hit_objects:
+        return None
+
+    duration_ms = hit_objects[-1][0]
+    note_count = len(hit_objects)
+    buckets = density_curve(hit_objects)
+    bucket_counts = [c for _, c in buckets] or [0]
+
+    stats = {
+        "column_count": column_count,
+        "note_count": note_count,
+        "duration_ms": duration_ms,
+        "notes_per_second": note_count / (duration_ms / 1000) if duration_ms > 0 else None,
+        "max_notes_per_second": max(bucket_counts),
+    }
+    stats.update(compute_pattern_mix(hit_objects))
+    return stats

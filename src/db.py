@@ -59,6 +59,32 @@ CREATE TABLE IF NOT EXISTS judgments (
     accuracy_loss REAL NOT NULL,
     FOREIGN KEY (play_id) REFERENCES plays(id)
 );
+
+-- Map-level descriptors computed once per beatmap (not per play) straight
+-- from its .osu file - see beatmap_parser.compute_beatmap_stats() /
+-- parse_mania_difficulty(). Lets the regression in src/analysis/ use real
+-- note density/pattern-mix/difficulty features for any play of a beatmap
+-- recorded from here on, instead of the judged_count/familiarity proxies
+-- it has to fall back to for plays whose .osu file is no longer on disk.
+-- Keyed by beatmap_id rather than play_id: these describe the chart
+-- itself, not any one attempt at it, so every play of the same beatmap
+-- shares one row (INSERT OR REPLACE on re-parse, in case the file changed).
+CREATE TABLE IF NOT EXISTS beatmap_stats (
+    beatmap_id INTEGER PRIMARY KEY,
+    column_count INTEGER,
+    note_count INTEGER,
+    duration_ms INTEGER,
+    notes_per_second REAL,
+    max_notes_per_second REAL,
+    jack_frac REAL,
+    stream_frac REAL,
+    isolated_frac REAL,
+    circle_size REAL,
+    overall_difficulty REAL,
+    approach_rate REAL,
+    hp_drain_rate REAL,
+    computed_at TEXT NOT NULL
+);
 """
 
 
@@ -492,6 +518,39 @@ def all_beatmaps():
         return [dict(r) for r in rows]
 
 
+def upsert_beatmap_stats(beatmap_id, stats):
+    """stats is a dict shaped like beatmap_parser.compute_beatmap_stats()'s
+    output merged with parse_mania_difficulty()'s - any keys matching a
+    beatmap_stats column are written, anything else is ignored so callers
+    can pass extra context without this needing to know about it."""
+    columns = [
+        "column_count", "note_count", "duration_ms", "notes_per_second", "max_notes_per_second",
+        "jack_frac", "stream_frac", "isolated_frac",
+        "circle_size", "overall_difficulty", "approach_rate", "hp_drain_rate",
+    ]
+    values = [stats.get(c) for c in columns]
+    with get_conn() as conn:
+        conn.execute(
+            f"INSERT OR REPLACE INTO beatmap_stats (beatmap_id, {', '.join(columns)}, computed_at) "
+            f"VALUES (?, {', '.join('?' for _ in columns)}, datetime('now'))",
+            (beatmap_id, *values),
+        )
+
+
+def beatmap_stats_for(beatmap_id):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM beatmap_stats WHERE beatmap_id = ?", (beatmap_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def all_beatmap_stats():
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM beatmap_stats").fetchall()
+        return [dict(r) for r in rows]
+
+
 def delete_beatmap(beatmap_id):
     """Deletes every play (and its misses/judgments) recorded for this beatmap."""
     with get_conn() as conn:
@@ -504,6 +563,7 @@ def delete_beatmap(beatmap_id):
             (beatmap_id,),
         )
         conn.execute("DELETE FROM plays WHERE beatmap_id = ?", (beatmap_id,))
+        conn.execute("DELETE FROM beatmap_stats WHERE beatmap_id = ?", (beatmap_id,))
 
 
 def delete_play(play_id):

@@ -1,9 +1,10 @@
 import os
+import sqlite3
 import time
 
 import db
 import settings
-from beatmap_parser import classify_pattern, parse_mania_beatmap
+from beatmap_parser import classify_pattern, compute_beatmap_stats, parse_mania_beatmap, parse_mania_difficulty
 from config import MISS_ATTRIBUTION_WINDOW
 from key_listener import KeyListener
 from tosu_client import TosuClient
@@ -237,8 +238,29 @@ class Collector:
         if not os.path.isfile(beatmap_path):
             return
         try:
-            self._beatmap_cache[beatmap_id] = parse_mania_beatmap(beatmap_path)
+            column_count, hit_objects = parse_mania_beatmap(beatmap_path)
+            self._beatmap_cache[beatmap_id] = (column_count, hit_objects)
         except (OSError, ValueError):
+            return
+        self._record_beatmap_stats(beatmap_id, beatmap_path, column_count, hit_objects)
+
+    def _record_beatmap_stats(self, beatmap_id, beatmap_path, column_count, hit_objects):
+        """Persists map-level stats (note density, pattern mix, CS/OD/AR/HP)
+        the first time a beatmap's .osu file is successfully parsed, so
+        future analysis (src/analysis/regression.py) has a real difficulty
+        feature to use even after this file is gone from disk - see
+        db.py's beatmap_stats table docstring. Best-effort: a failure here
+        shouldn't break collection of the play itself."""
+        stats = compute_beatmap_stats(column_count, hit_objects)
+        if stats is None:
+            return
+        try:
+            stats.update(parse_mania_difficulty(beatmap_path))
+        except (OSError, ValueError):
+            pass
+        try:
+            db.upsert_beatmap_stats(beatmap_id, stats)
+        except sqlite3.Error:
             pass
 
     def _record_judgment_deltas(self, hits, song_time_ms):
