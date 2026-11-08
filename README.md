@@ -105,11 +105,11 @@ Two independent methods flag plays that look unusually bad or unusually good giv
 
 ## Results
 
-Example output from a real run of `/api/analysis` against this project's own local `osu_analytics.db` (76 recorded plays, 3,448 recorded misses, one player) — included here as a worked example of what each method actually produces, not as a general claim:
+Example output from a real run of `/api/analysis` against this project's own local `osu_analytics.db` (80 recorded plays, 3,721 recorded misses, one player — the same run shown in the screenshots above) — included here as a worked example of what each method actually produces, not as a general claim:
 
-- **Clustering:** 3,338 of 3,448 misses were usable (110 unmatched to a key, excluded). Silhouette sweep selected k=6 (silhouette 0.526); KMeans vs. Agglomerative ARI was 1.000 (the two methods agreed completely on this data); seed-stability ARI was 1.000 ± 0.000. Four of the six clusters split almost entirely by finger within jack patterns (23–25% of misses each), one cluster (7%) was dominated by stream patterns, and one tiny cluster (7 misses) was isolated-pattern misses — i.e. on this dataset, clustering mostly rediscovered "which finger", because jacks vastly outnumber other pattern types in the underlying data.
-- **Anomaly detection:** of 74 plays with complete data, 9 were flagged by at least one method (4 by both IsolationForest and the z-score baseline, 5 by IsolationForest only, 0 by the baseline only).
-- **Regression:** over 76 plays (repeated 5-fold × 5-repeat CV), the Poisson baseline scored mean CV R² = 0.615 ± 0.191 (MAE 19.1 ± 8.2); the RandomForest scored R² = 0.618 ± 0.192 (MAE 18.7 ± 6.2) — a negligible edge for the forest, reported as such rather than oversold.
+- **Clustering:** 3,603 of 3,721 misses were usable (118 unmatched to a key, excluded). Silhouette sweep selected k=6 (silhouette 0.528); KMeans vs. Agglomerative ARI was 1.000 (the two methods agreed completely on this data); seed-stability ARI was 1.000 ± 0.000. Four of the six clusters split almost entirely by finger within jack patterns (22–24% of misses each), one cluster (6%) was dominated by stream patterns, and one tiny cluster (8 misses) was isolated-pattern misses — i.e. on this dataset, clustering mostly rediscovered "which finger", because jacks vastly outnumber other pattern types in the underlying data.
+- **Anomaly detection:** of 77 plays with complete data, 11 were flagged by at least one method (4 by both IsolationForest and the z-score baseline, 7 by IsolationForest only, 0 by the baseline only).
+- **Regression:** over 80 plays (repeated 5-fold × 5-repeat CV), the Poisson baseline scored mean CV R² = 0.011 ± 1.478 (MAE 23.3 ± 13.3) — effectively no signal, and unstable across folds (the large std says so plainly); the RandomForest scored R² = 0.714 ± 0.372 (MAE 17.4 ± 6.2), a clear edge this time. Worth noting as its own honest data point: the baseline's score moved a lot as more plays were added between runs, which says more about how little data double digits of plays really is for cross-validation than about either model being "right."
 
 ## Limitations
 
