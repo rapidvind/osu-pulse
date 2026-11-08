@@ -1,7 +1,11 @@
-/* osu!-inspired pink & white theme. Fixed (not tied to OS light/dark mode)
-   so every text/background pairing is deliberate and always readable -
-   no variable falls through to an unreadable combination. */
-.viz-root {
+/* osu!-inspired themes: strawberry sunrise (pink & white, morning),
+   midday mandarin (warm citrus-orchard orange, afternoon) and evening
+   elderberry (dark, night). Each is a deliberate, self-contained variable
+   set - no variable falls through to an unreadable combination in any of
+   the three. The active theme is chosen by data-theme on <html>, set by
+   theme.js (defaults to time-of-day, overridable and remembered
+   per-browser). */
+:root, .viz-root {
   color-scheme: light;
   --surface-1:      #ffffff;
   --page:           #fff3f8;
@@ -17,17 +21,189 @@
   --series-2:       #eb6834;
   --series-3:       #1baf7a;
   --series-4:       #eda100;
+  --series-5:       #2f7fe0;
   --series-6:       #008300;
   --series-7:       #4a3aa7;
   --series-8:       #e34948;
+  --series-9:       #55565c;
+}
+
+:root[data-theme="midday-mandarin"], :root[data-theme="midday-mandarin"] .viz-root {
+  color-scheme: light;
+  --surface-1:      #fff9f0;
+  --page:           #ffecd2;
+  --text-primary:   #3a2410;
+  --text-secondary: #8f5f2e;
+  --muted:          #c99a63;
+  --grid:           #ffdfae;
+  --baseline:       #f3c583;
+  --border:         rgba(217, 119, 6, 0.28);
+  --accent:         #f7941d;
+  --accent-dark:    #c9720a;
+  --series-1:       #f7941d;
+  --series-2:       #e2574c;
+  --series-3:       #4c7a3a;
+  --series-4:       #d99000;
+  --series-5:       #3178c6;
+  --series-6:       #3f8f3f;
+  --series-7:       #6a53c9;
+  --series-8:       #d84545;
+  --series-9:       #5c5347;
+}
+
+:root[data-theme="evening-elderberry"], :root[data-theme="evening-elderberry"] .viz-root {
+  color-scheme: dark;
+  --surface-1:      #1e1620;
+  --page:           #120c15;
+  --text-primary:   #f4e8f0;
+  --text-secondary: #c090a8;
+  --muted:          #6e5468;
+  --grid:           #2c1f2c;
+  --baseline:       #4a3345;
+  --border:         rgba(255, 102, 171, 0.22);
+  --accent:         #ff7ab8;
+  --accent-dark:    #ff9ac8;
+  --series-1:       #ff7ab8;
+  --series-2:       #ff9457;
+  --series-3:       #35d69a;
+  --series-4:       #ffc233;
+  --series-5:       #6aa8ff;
+  --series-6:       #4ade80;
+  --series-7:       #a394fb;
+  --series-8:       #ff6f6f;
+  --series-9:       #b0aab8;
 }
 
 * { box-sizing: border-box; }
+:root { --overlay-opacity: 1; }
+html {
+  background: transparent;
+  min-height: 100%;
+}
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: var(--page);
+  /* Transparent, not the theme's page color - see .viz-root below for why:
+     the overlay's translucency slider needs the page's background AND
+     content to fade together as one layer, while floating controls (theme
+     toggle, opacity slider itself) stay outside that layer so they never
+     fade into unusability. */
+  background: transparent;
   color: var(--text-primary);
+  transition: color 0.2s ease;
+  /* A narrow overlay window must never grow a horizontal scrollbar - any
+     stray overflow (long beatmap titles, chart edge labels) gets clipped
+     here rather than dragging the whole page wider and breaking the
+     vertical stack of tiles/cards below it. */
+  overflow-x: hidden;
+}
+
+/* Everything actually on the page lives here - background, watermark and
+   opacity all apply to this one layer so the in-game overlay's translucency
+   slider (theme.js) fades the whole page as a unit, uniformly, while
+   floating controls appended directly to <body> (siblings of this element,
+   not descendants) are unaffected and stay fully readable/grabbable at any
+   opacity setting. Outside the overlay (a normal browser tab), --overlay-
+   opacity is just never changed from its 1 default, so this is a no-op. */
+.viz-root {
+  display: block;
+  min-height: 100vh;
+  background: var(--page);
+  background-repeat: no-repeat;
+  /* background-position anchors the watermark to the viewport's bottom
+     edge on its own even with the default (scroll) attachment - no need
+     for background-attachment:fixed, which forces the browser to repaint
+     the background on every scroll frame instead of compositing it. That's
+     the classic cause of laggy scrolling, and more noticeable here since
+     the overlay window doesn't get the same GPU compositing fast-path a
+     normal top-level browser window does. */
+  background-position: bottom -20px right -20px;
+  opacity: var(--overlay-opacity);
+  transition: background-color 0.2s ease, opacity 0.15s ease;
+}
+
+/* Faint per-theme fruit watermark, tucked in the bottom-right corner -
+   baked-in low fill-opacity in each SVG so it never fights with
+   foreground contrast, no matter the theme. */
+:root[data-theme="strawberry-sunrise"] .viz-root {
+  background-image: url("/static/motif-strawberry.svg");
+  background-size: 380px auto;
+}
+:root[data-theme="midday-mandarin"] .viz-root {
+  background-image: url("/static/motif-mandarin.svg");
+  background-size: 420px auto;
+}
+:root[data-theme="evening-elderberry"] .viz-root {
+  background-image: url("/static/motif-elderberry.svg");
+  background-size: 380px auto;
+}
+@media (max-width: 640px) {
+  .viz-root { background-image: none; }
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 900;
+  display: flex;
+  gap: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.theme-toggle button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.theme-toggle button svg { width: 17px; height: 17px; }
+.theme-toggle button:hover { color: var(--text-primary); }
+.theme-toggle button.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+@media (max-width: 640px) {
+  .theme-toggle { top: 10px; right: 10px; }
+}
+
+/* Only ever created (theme.js) when running inside the pywebview overlay
+   window, never in a normal browser tab - see window.pywebview detection.
+   Bottom-left, not top-left: the nav bar's own links (Dashboard, Ascent,
+   ...) start right at the top-left of .wrap, and a fixed top-left control
+   sat directly on top of them, blocking clicks. */
+.overlay-opacity-control {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px 6px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.overlay-opacity-control input[type="range"] {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 60px; }
 h1 { font-size: 20px; margin: 0 0 4px; font-weight: 700; color: var(--accent-dark); }
@@ -39,7 +215,7 @@ h1 { font-size: 20px; margin: 0 0 4px; font-weight: 700; color: var(--accent-dar
 .nav a:hover { color: var(--accent-dark); }
 
 .brand-row { display: flex; align-items: center; gap: 10px; }
-.brand-row h1 { margin: 0; }
+.brand-row h1 { margin: 0; min-width: 0; overflow-wrap: break-word; }
 .mascot-icon { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
 
 .welcome-overlay {
@@ -88,16 +264,23 @@ h1 { font-size: 20px; margin: 0 0 4px; font-weight: 700; color: var(--accent-dar
   background: var(--muted);
 }
 
-.tiles { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+/* Fixed 3-column grid rather than flex-wrap - deterministic 3-per-row
+   regardless of tile count (2 tiles -> 1 row with a blank cell, 5 -> 3+2,
+   6 -> 3+3), unlike flex-wrap which reflows unpredictably as tile content
+   width varies. */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 28px; }
 .tile {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px 18px;
-  min-width: 140px;
+  padding: 12px 14px;
+  min-width: 0;
 }
-.tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-.tile .value { font-size: 26px; font-weight: 700; color: var(--accent-dark); }
+@media (max-width: 500px) {
+  .wrap { padding: 20px 14px 40px; }
+}
+.tile .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; overflow-wrap: break-word; }
+.tile .value { font-size: 22px; font-weight: 700; color: var(--accent-dark); overflow-wrap: break-word; }
 
 .card {
   background: var(--surface-1);
@@ -154,6 +337,13 @@ td.primary a:hover { text-decoration: underline; }
   flex-shrink: 0;
 }
 .title-row { display: flex; align-items: center; }
+/* Flex items default to min-width:auto, which refuses to shrink below the
+   content's unwrapped width - a long beatmap title would otherwise force
+   this whole row (and the page under it) wider than the viewport instead
+   of wrapping, which is exactly what broke stacking in the narrow overlay
+   window. min-width:0 lets it shrink and wrap normally. */
+.title-row > div { min-width: 0; flex: 1; }
+.title-row h1 { overflow-wrap: break-word; }
 
 .session-collage {
   display: inline-flex;

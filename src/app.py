@@ -321,7 +321,7 @@ def main():
     )
     flask_thread.start()
 
-    overlay.run(FLASK_PORT)  # blocks - Ctrl+Shift+O toggles the overlay window
+    overlay.run(FLASK_PORT)  # blocks - Ctrl+Shift+P toggles the overlay window
 
 
 if __name__ == "__main__":

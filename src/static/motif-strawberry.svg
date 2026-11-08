@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <g opacity="0.11">
+    <path fill="#e14f8f" d="M150 70 C 210 70 265 125 265 185 C 265 250 210 290 150 290 C 90 290 35 250 35 185 C 35 125 90 70 150 70 Z"/>
+    <g fill="#c9184a">
+      <ellipse cx="105" cy="150" rx="5" ry="8" transform="rotate(-20 105 150)"/>
+      <ellipse cx="150" cy="130" rx="5" ry="8" transform="rotate(0 150 130)"/>
+      <ellipse cx="195" cy="150" rx="5" ry="8" transform="rotate(20 195 150)"/>
+      <ellipse cx="90" cy="195" rx="5" ry="8" transform="rotate(-30 90 195)"/>
+      <ellipse cx="130" cy="210" rx="5" ry="8" transform="rotate(-5 130 210)"/>
+      <ellipse cx="170" cy="210" rx="5" ry="8" transform="rotate(5 170 210)"/>
+      <ellipse cx="210" cy="195" rx="5" ry="8" transform="rotate(30 210 195)"/>
+      <ellipse cx="150" cy="250" rx="5" ry="8" transform="rotate(0 150 250)"/>
+    </g>
+    <g fill="#2f8f2f">
+      <path d="M150 75 C 140 45 120 35 100 45 C 115 65 135 78 150 75 Z"/>
+      <path d="M150 75 C 160 45 180 35 200 45 C 185 65 165 78 150 75 Z"/>
+      <path d="M150 75 C 150 40 150 25 150 20 C 155 40 155 60 150 75 Z"/>
+    </g>
+  </g>
+</svg>

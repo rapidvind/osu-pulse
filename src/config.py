@@ -43,3 +43,7 @@ else:
 
 DB_PATH = os.path.join(_DATA_DIR, "osu_analytics.db")
 FLASK_PORT = 5151
+
+# Global hotkey (via the `keyboard` lib, same one key_listener.py already
+# hooks with) that shows/hides the in-game overlay window - see overlay.py.
+OVERLAY_HOTKEY = "ctrl+shift+p"
