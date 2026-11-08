@@ -6,6 +6,9 @@ beatmap file itself, so we read it directly to build a density curve and to
 classify the note pattern around a miss (jack vs stream).
 """
 import re
+from pathlib import Path
+
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
 
 def parse_mania_beatmap(osu_file_path):
@@ -61,6 +64,27 @@ def parse_background_filename(osu_file_path):
                 if len(parts) >= 3 and parts[0] == "0":
                     return parts[2].strip().strip('"')
     return None
+
+
+def resolve_background_path(base_dir, bg_filename):
+    """Resolves bg_filename (pulled straight out of a .osu file's [Events]
+    section by parse_background_filename) against base_dir, and returns it
+    only if the resolved path stays inside base_dir and has an allowed
+    image extension.
+
+    .osu files are routinely downloaded from third-party/community sources,
+    so bg_filename is untrusted input - it can contain `../` traversal, an
+    absolute path, or a drive letter/UNC prefix. See GH issue #2 (path
+    traversal / arbitrary file read in /beatmap-image)."""
+    if not bg_filename:
+        return None
+    base = Path(base_dir).resolve()
+    candidate = (base / bg_filename).resolve()
+    if not candidate.is_relative_to(base):
+        return None
+    if candidate.suffix.lower() not in ALLOWED_IMAGE_EXTENSIONS:
+        return None
+    return str(candidate)
 
 
 def density_curve(hit_objects, bucket_ms=1000):

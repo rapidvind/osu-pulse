@@ -9,7 +9,12 @@ import overlay
 import progress
 import settings
 from analysis.report import build_full_report
-from beatmap_parser import density_curve, parse_background_filename, parse_mania_beatmap
+from beatmap_parser import (
+    density_curve,
+    parse_background_filename,
+    parse_mania_beatmap,
+    resolve_background_path,
+)
 from collector import Collector
 from config import FLASK_PORT
 from tosu_launcher import ensure_tosu_running, stop_tosu_if_we_started_it
@@ -213,9 +218,7 @@ def _resolve_background_fallback(beatmap_id):
         bg_filename = parse_background_filename(beatmap_path)
     except OSError:
         return None
-    if not bg_filename:
-        return None
-    return os.path.join(os.path.dirname(beatmap_path), bg_filename)
+    return resolve_background_path(os.path.dirname(beatmap_path), bg_filename)
 
 
 @app.route("/api/live")
