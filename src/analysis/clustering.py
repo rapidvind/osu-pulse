@@ -67,7 +67,7 @@ def cluster_summary(miss_df, labels):
     """Human-readable description of each cluster: its size, its dominant
     finger/pattern (with the share of the cluster they make up), and its
     combo/position-in-map tendency. This is the part a reviewer can sanity
-    check against intuition ("yeah, left-ring jacks early in the map" is a
+    check against intuition ("yeah, left-middle jacks early in the map" is a
     real, checkable claim)."""
     df = miss_df.copy()
     df["cluster"] = labels

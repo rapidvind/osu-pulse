@@ -10,7 +10,7 @@ from fake data have no place representing real play.
 import numpy as np
 import pandas as pd
 
-FINGERS = ["left_ring", "left_index", "right_index", "right_ring"]
+FINGERS = ["left_middle", "left_index", "right_index", "right_middle"]
 PATTERNS = ["jack", "stream", "isolated"]
 
 

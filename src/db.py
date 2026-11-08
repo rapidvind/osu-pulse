@@ -131,6 +131,14 @@ def init_db():
                 (random_session_name(), session_id),
             )
 
+        # DEFAULT_KEY_TO_FINGER used to call the pinky-adjacent fingers
+        # "ring" - they're actually "middle" (settings.py). Renames any
+        # misses already logged under the old labels so historical data
+        # reads correctly too, not just future plays. Idempotent (a no-op
+        # once already applied).
+        conn.execute("UPDATE misses SET finger = 'left_middle' WHERE finger = 'left_ring'")
+        conn.execute("UPDATE misses SET finger = 'right_middle' WHERE finger = 'right_ring'")
+
 
 # --- game sessions ---------------------------------------------------------
 

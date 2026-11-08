@@ -4,12 +4,12 @@
 // red, green, yellow, violet - a wide hue spread so all four stay visually
 // distinct from each other and from the blue density curve underneath them.
 const FINGER_COLORS = {
-  left_ring: "var(--series-8)",
+  left_middle: "var(--series-8)",
   left_index: "var(--series-6)",
   right_index: "var(--series-4)",
-  right_ring: "var(--series-7)",
+  right_middle: "var(--series-7)",
 };
-const FINGER_ORDER = ["left_ring", "left_index", "right_index", "right_ring"];
+const FINGER_ORDER = ["left_middle", "left_index", "right_index", "right_middle"];
 
 const JUDGMENT_LABELS = { "0": "miss", "50": "50", "100": "100", katu: "200 (good)" };
 

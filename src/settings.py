@@ -15,10 +15,10 @@ from config import _DATA_DIR
 SETTINGS_PATH = os.path.join(_DATA_DIR, "settings.json")
 
 DEFAULT_KEY_TO_FINGER = {
-    "a": "left_ring",
+    "a": "left_middle",
     "s": "left_index",
     ";": "right_index",
-    "'": "right_ring",
+    "'": "right_middle",
 }
 
 _lock = threading.Lock()
