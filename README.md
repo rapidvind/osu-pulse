@@ -30,8 +30,6 @@ This project exists as a small, honestly-evaluated prototype of mining gameplay 
 
 ![Analysis - outliers and regression](docs/screenshots/analysis-outliers-regression.jpg)
 
-*(GIF of a live session — to be added)*
-
 ## How it works / Architecture
 
 tosu (https://github.com/tosuapp/tosu) reads osu!'s live memory and exposes it over a local websocket — the only way to get miss/combo/beatmap data out of osu! at all, since the game itself exposes nothing to outside programs. But tosu has no idea which physical key you pressed. So this project layers a second signal on top: a global keyboard hook that timestamps your 4 mania keys, and correlates "a miss just happened" (from tosu) with "which tracked key was pressed most recently" (from the hook) to attribute each miss to a finger.
@@ -122,7 +120,7 @@ Example output from a real run of `/api/analysis` against this project's own loc
 ## Project structure
 
 ```
-osu-analytics/
+osu-pulse/
 ├── src/
 │   ├── app.py              Flask app: routes, API, entry point
 │   ├── collector.py        Ties tosu + the key hook together, detects misses
@@ -183,6 +181,10 @@ Once everything works via `python src/app.py`:
    ```
 
 The resulting `dist/osu-pulse.exe` bundles Python, all dependencies, and tosu itself — outside `src/`. Users just run it (as Administrator, for the key hook) — no separate tosu install needed, no Python install needed. The `--add-data` flags above also ship `THIRD_PARTY_NOTICES.md` and tosu's bundled LGPL-3.0 license text next to the exe, so the license terms travel with the binary, not just the source repo.
+
+## Security
+
+osu!Pulse runs entirely locally and binds its Flask dashboard to `127.0.0.1` only — nothing is exposed to the network. A path-traversal issue in `/beatmap-image` (arbitrary file read via an unsanitised `.osu` background filename) was fixed in [f2697d9](https://github.com/rapidvind/osu-pulse/commit/f2697d97c48ddbdde891c1b57d84330bbdb64364) ([#2](https://github.com/rapidvind/osu-pulse/issues/2)).
 
 ## License
 
