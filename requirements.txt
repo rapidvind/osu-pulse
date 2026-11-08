@@ -2,3 +2,7 @@ flask
 websockets
 keyboard
 pyinstaller
+scikit-learn
+pandas
+numpy
+pytest
