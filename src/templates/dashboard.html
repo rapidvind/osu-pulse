@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <title>osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
@@ -18,6 +21,7 @@
       <a id="game-session-link" href="#" class="btn">Current game session</a>
       <a href="/sessions" class="btn">Session history</a>
       <a href="/ascent" class="btn">Ascent</a>
+      <a href="/analysis" class="btn">Analysis</a>
       <button class="btn" style="background:var(--series-8)" onclick="endSession()">End session</button>
     </div>
 
@@ -73,6 +77,7 @@
   </div>
 </div>
 
+<script src="/static/theme.js"></script>
 <script src="/static/live-switch.js"></script>
 <script>
 function closeWelcome() {

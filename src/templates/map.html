@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <title>Map Analytics - osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
   <div class="wrap">
-    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a> <a href="/analysis">Analysis</a></div>
     <div class="title-row">
       <img id="map-thumb" class="beatmap-thumb-lg" src="/beatmap-image/{{ beatmap_id }}" onerror="this.style.display='none'">
       <div>
@@ -41,10 +44,10 @@
       <div class="key-row" style="margin-bottom:12px">
         <label style="width:auto">Show:</label>
         <select id="density-type-selector" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text-primary);font-size:13px">
-          <option value="miss">Misses</option>
-          <option value="katu">200s (good)</option>
-          <option value="100">100s</option>
-          <option value="50">50s</option>
+          <option value="miss" style="color:var(--series-8)">Misses</option>
+          <option value="katu" style="color:var(--series-3)">200s (good)</option>
+          <option value="100" style="color:var(--series-5)">100s</option>
+          <option value="50" style="color:var(--series-9)">50s</option>
         </select>
       </div>
       <div id="density-chart"></div>
@@ -177,5 +180,6 @@ document.getElementById("play-selector").addEventListener("change", (e) => {
 load();
 setInterval(load, 5000);
 </script>
+<script src="/static/theme.js"></script>
 </body>
 </html>

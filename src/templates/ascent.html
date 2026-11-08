@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <title>Ascent - osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
   <div class="wrap">
-    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a></div>
+    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a> <a href="/analysis">Analysis</a></div>
     <h1>Ascent</h1>
     <div class="sub">A conservative forecast of your PP and global rank, session by session. Only sessions with at least a few serious (non-spoof) plays count toward it - the trend is dampened on purpose, so beating it is a real but attainable win.</div>
 
@@ -112,5 +115,6 @@ async function load() {
 load();
 setInterval(load, 10000);
 </script>
+<script src="/static/theme.js"></script>
 </body>
 </html>

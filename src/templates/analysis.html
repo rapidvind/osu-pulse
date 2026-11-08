@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Analysis - osu!Pulse</title>
+<link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a> <a href="/ascent">Ascent</a></div>
+    <h1>Analysis</h1>
+    <div class="sub">
+      Unsupervised ML over your own recorded misses and plays: recurring failure-type clusters, outlier plays, and a
+      proxy-difficulty regression with residuals. Everything below is computed fresh on each load - nothing here is
+      cached or precomputed. See README.md's "Analytics / ML" section for what each method can and can't claim,
+      including the noisy miss-attribution window and why the regression uses proxies instead of real map difficulty.
+    </div>
+
+    <div id="error-banner" class="card" style="display:none;background:var(--series-8);color:#fff"></div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Misses clustered</div><div class="value" id="tile-clustered">-</div></div>
+      <div class="tile"><div class="label">Plays analyzed</div><div class="value" id="tile-plays">-</div></div>
+      <div class="tile"><div class="label">Plays flagged as outliers</div><div class="value" id="tile-outliers">-</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Miss clusters (recurring failure types)</h2>
+      <div class="sub" id="cluster-method-sub" style="margin-bottom:12px"></div>
+      <div id="cluster-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Outlier plays</h2>
+      <div class="sub" id="anomaly-method-sub" style="margin-bottom:12px"></div>
+      <table id="table-anomaly">
+        <thead><tr><th>Play</th><th>Direction</th><th>Miss rate</th><th>Accuracy</th><th>Flagged by</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Expected misses (proxy-difficulty regression)</h2>
+      <div class="sub" id="regression-method-sub" style="margin-bottom:12px"></div>
+      <table id="table-models" style="margin-bottom:20px">
+        <thead><tr><th>Model</th><th>Mean CV R&sup2;</th><th>Mean CV MAE</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h2 style="font-size:13px">Biggest surprises</h2>
+      <div class="sub" style="margin-bottom:12px">Negative residual = fewer misses than the model expected ("easier than expected"); positive = more ("harder than expected").</div>
+      <table id="table-residuals">
+        <thead><tr><th>Play</th><th>Actual misses</th><th>Expected misses</th><th>Residual</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)", "var(--series-6)", "var(--series-7)", "var(--series-8)"];
+
+function renderTable(tbody, rows, renderRow, emptyColspan) {
+  tbody.innerHTML = "";
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${emptyColspan}" class="empty">No data yet.</td></tr>`;
+    return;
+  }
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = renderRow(r);
+    tbody.appendChild(tr);
+  });
+}
+
+function fmt(n, digits) {
+  return (n === null || n === undefined || Number.isNaN(n)) ? "-" : Number(n).toFixed(digits ?? 2);
+}
+
+function renderClusters(data) {
+  const el = document.getElementById("cluster-list");
+  const sub = document.getElementById("cluster-method-sub");
+  el.innerHTML = "";
+
+  if (data.error) {
+    el.innerHTML = `<div class="empty">${data.error} (${data.usable_misses ?? 0} usable misses - need more play history).</div>`;
+    return;
+  }
+
+  const km = data.kmeans, agg = data.agglomerative;
+  sub.innerHTML = `k=${data.k} chosen by silhouette sweep. KMeans silhouette ${fmt(km.silhouette, 3)}, ` +
+    `seed-stability ARI ${fmt(km.stability_ari_mean, 3)} &plusmn; ${fmt(km.stability_ari_std, 3)}. ` +
+    `Agglomerative silhouette ${fmt(agg.silhouette, 3)} (KMeans vs. agglomerative ARI ${fmt(data.kmeans_vs_agglomerative_ari, 3)}). ` +
+    `KMeans on one-hot finger/pattern columns treats "different finger" as a fixed Euclidean distance, not a measured one - ` +
+    `take cluster boundaries as suggestive groupings, not ground truth.`;
+
+  km.clusters.forEach((c, i) => {
+    const pct = Math.round(c.share * 100);
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">Cluster ${c.cluster}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${COLORS[i % COLORS.length]}"></div></div>
+      <div class="bar-count">${c.size}</div>
+    `;
+    el.appendChild(row);
+    const desc = document.createElement("div");
+    desc.className = "sub";
+    desc.style.margin = "2px 0 10px 120px";
+    desc.textContent = `${pct}% of usable misses - mostly ${c.dominant_finger} (${Math.round(c.dominant_finger_share * 100)}%), ` +
+      `${c.dominant_pattern} pattern (${Math.round(c.dominant_pattern_share * 100)}%), median combo ${c.median_combo_before_miss}, ` +
+      `avg. ${Math.round(c.mean_position_frac * 100)}% into the map.`;
+    el.appendChild(desc);
+  });
+}
+
+function renderAnomaly(data) {
+  const sub = document.getElementById("anomaly-method-sub");
+  const tbody = document.querySelector("#table-anomaly tbody");
+
+  if (data.error) {
+    sub.textContent = `${data.error} (${data.n_plays ?? 0} plays).`;
+    renderTable(tbody, [], () => "", 5);
+    return;
+  }
+
+  sub.innerHTML = `IsolationForest vs. a robust z-score baseline (median/MAD on miss rate &amp; accuracy). ` +
+    `Agreement: both methods ${data.agreement.both}, IsolationForest only ${data.agreement.iforest_only}, ` +
+    `baseline only ${data.agreement.baseline_only} - with only ${data.n_plays} plays, agreement between methods ` +
+    `is a stronger signal than either alone.`;
+
+  renderTable(tbody, data.flagged, r => {
+    const flaggedBy = r.is_outlier_baseline && r.is_outlier_iforest ? "both"
+      : r.is_outlier_baseline ? "baseline" : "isolation forest";
+    return `
+      <td class="primary"><a href="/play/${r.play_id}" style="color:var(--series-1)">Play ${r.play_id}</a></td>
+      <td>${r.direction.replace(/_/g, " ")}</td>
+      <td>${fmt(r.miss_rate * 100, 1)}%</td>
+      <td>${fmt(r.accuracy, 2)}%</td>
+      <td>${flaggedBy}</td>
+    `;
+  }, 5);
+}
+
+function renderRegression(data) {
+  const sub = document.getElementById("regression-method-sub");
+  const modelsBody = document.querySelector("#table-models tbody");
+  const residualsBody = document.querySelector("#table-residuals tbody");
+
+  if (data.error) {
+    sub.textContent = `${data.error} (${data.n_plays ?? 0} plays).`;
+    renderTable(modelsBody, [], () => "", 3);
+    renderTable(residualsBody, [], () => "", 4);
+    return;
+  }
+
+  sub.innerHTML = `Repeated ${data.cv_splits}-fold cross-validation (&times;${data.cv_repeats} repeats) over ` +
+    `${data.n_plays} plays. Features: ${data.feature_names.join(", ")} - proxies for difficulty (note count,` +
+    ` map familiarity, session fatigue), not real chart difficulty. Primary model for residuals below: ` +
+    `<strong>${data.primary_model.replace("_", " ")}</strong>` +
+    (data.rf_beats_baseline ? " (random forest beat the Poisson baseline on mean CV R&sup2;)."
+      : " (random forest did NOT beat the Poisson baseline - reported plainly, not hidden).");
+
+  renderTable(modelsBody, [
+    { name: "Poisson baseline", ...data.baseline_poisson },
+    { name: "Random forest", ...data.random_forest },
+  ], r => `
+    <td class="primary">${r.name}</td>
+    <td>${fmt(r.r2_mean, 3)} &plusmn; ${fmt(r.r2_std, 3)}</td>
+    <td>${fmt(r.mae_mean, 1)} &plusmn; ${fmt(r.mae_std, 1)}</td>
+  `, 3);
+
+  const biggest = data.residuals.slice(0, 5).concat(data.residuals.slice(-5).reverse());
+  renderTable(residualsBody, biggest, r => `
+    <td class="primary"><a href="/play/${r.play_id}" style="color:var(--series-1)">Play ${r.play_id}</a></td>
+    <td>${fmt(r.actual_misses, 0)}</td>
+    <td>${fmt(r.expected_misses, 1)}</td>
+    <td style="color:${r.residual > 0 ? 'var(--series-8)' : 'var(--series-1)'}">${r.residual > 0 ? "+" : ""}${fmt(r.residual, 1)}</td>
+  `, 4);
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("/api/analysis");
+    const data = await res.json();
+
+    document.getElementById("tile-clustered").textContent = data.miss_exclusions.usable ?? "-";
+    document.getElementById("tile-plays").textContent = data.play_count ?? "-";
+    const outlierCount = data.anomaly && !data.anomaly.error ? data.anomaly.flagged.length : "-";
+    document.getElementById("tile-outliers").textContent = outlierCount;
+
+    renderClusters(data.clustering);
+    renderAnomaly(data.anomaly);
+    renderRegression(data.regression);
+  } catch (e) {
+    const banner = document.getElementById("error-banner");
+    banner.style.display = "block";
+    banner.textContent = "Couldn't load analysis - " + e;
+    console.error(e);
+  }
+}
+refresh();
+</script>
+</body>
+</html>

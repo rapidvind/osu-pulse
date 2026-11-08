@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <title>Session History - osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
   <div class="wrap">
-    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a> <a href="/analysis">Analysis</a></div>
     <h1>Session history</h1>
     <div class="sub">Every game session (osu! open to close) recorded so far. Export the current session with the button below, or an older one from the list.</div>
 
@@ -144,5 +147,6 @@ async function load() {
 load();
 setInterval(load, 5000);
 </script>
+<script src="/static/theme.js"></script>
 </body>
 </html>

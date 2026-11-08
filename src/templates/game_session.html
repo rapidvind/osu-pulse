@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <title>Game Session - osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
   <div class="wrap">
-    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a> <a href="/ascent">Ascent</a></div>
+    <div class="nav"><a href="/">Dashboard</a> <a href="/sessions">Session history</a> <a href="/ascent">Ascent</a> <a href="/analysis">Analysis</a></div>
     <h1 id="game-session-title">Game session <button class="btn" style="padding:2px 10px;font-size:12px;vertical-align:middle" onclick="renameSession()">Rename</button></h1>
     <div class="sub" id="game-session-sub">Every map played from osu! open to close (or until now, if still running).</div>
 
@@ -20,6 +23,11 @@
     <div class="card">
       <h2>Misses per map, in play order</h2>
       <div id="chart-plays"></div>
+    </div>
+
+    <div class="card">
+      <h2>Miss rate trend (fatigue check)</h2>
+      <div id="chart-fatigue"></div>
     </div>
 
     <div class="card">
@@ -121,11 +129,13 @@ async function load() {
   document.getElementById("tile-misses").textContent = plays.reduce((sum, p) => sum + p.miss_count, 0);
 
   renderPlaysChart(document.getElementById("chart-plays"), plays);
+  renderFatigueChart(document.getElementById("chart-fatigue"), plays);
   renderPlaysTable(document.querySelector("#table-plays tbody"), plays);
 }
 
 load();
 setInterval(load, 4000);
 </script>
+<script src="/static/theme.js"></script>
 </body>
 </html>

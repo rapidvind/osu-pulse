@@ -5,8 +5,10 @@ import webbrowser
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 import db
+import overlay
 import progress
 import settings
+from analysis.report import build_full_report
 from beatmap_parser import density_curve, parse_background_filename, parse_mania_beatmap
 from collector import Collector
 from config import FLASK_PORT
@@ -74,6 +76,16 @@ def ascent_page():
 @app.route("/api/ascent")
 def api_ascent():
     return jsonify(progress.get_progress_forecast())
+
+
+@app.route("/analysis")
+def analysis_page():
+    return render_template("analysis.html")
+
+
+@app.route("/api/analysis")
+def api_analysis():
+    return jsonify(build_full_report())
 
 
 @app.route("/api/shutdown", methods=["POST"])
@@ -230,6 +242,7 @@ def _play_payload(play_id):
         return {"play": None}
     misses = db.misses_for_play(play_id)
     judgments = db.judgments_for_play(play_id)
+    hit_errors = db.hit_errors_for_play(play_id)
 
     hit_objects = _get_hit_objects(play["beatmap_id"], play.get("beatmap_path"))
     density = density_curve(hit_objects) if hit_objects else []
@@ -239,6 +252,7 @@ def _play_payload(play_id):
         "misses": misses,
         "judgments": judgments,
         "density": density,
+        "hit_errors": hit_errors,
     }
 
 
@@ -295,7 +309,16 @@ def main():
     ensure_tosu_running()
     collector.start()
     threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{FLASK_PORT}")).start()
-    app.run(host="127.0.0.1", port=FLASK_PORT, debug=False)
+
+    # Flask moves to a background thread so the overlay's window loop
+    # (pywebview) can take the main thread below - it needs to on Windows.
+    flask_thread = threading.Thread(
+        target=lambda: app.run(host="127.0.0.1", port=FLASK_PORT, debug=False, use_reloader=False),
+        daemon=True,
+    )
+    flask_thread.start()
+
+    overlay.run(FLASK_PORT)  # blocks - Ctrl+Shift+O toggles the overlay window
 
 
 if __name__ == "__main__":

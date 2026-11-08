@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <title>Play Analytics - osu!Pulse</title>
 <link rel="stylesheet" href="/static/style.css">
+<script>
+(function(){var t=localStorage.getItem("osu-pulse-theme");if(!t){var h=new Date().getHours();t=(h>=6&&h<17)?"strawberry-sunrise":(h>=17&&h<20)?"midday-mandarin":"evening-elderberry";}document.documentElement.dataset.theme=t;})();
+</script>
 </head>
 <body>
 <div class="viz-root">
   <div class="wrap">
-    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a></div>
+    <div class="nav"><a href="/">Dashboard</a> <a href="/ascent">Ascent</a> <a href="/analysis">Analysis</a></div>
     <div class="title-row">
       <img id="play-thumb" class="beatmap-thumb-lg" style="display:none" onerror="this.style.display='none'">
       <div>
@@ -17,30 +20,36 @@
       </div>
     </div>
 
-    <div class="tiles">
-      <div class="tile"><div class="label">Accuracy</div><div class="value" id="tile-accuracy">-</div></div>
-      <div class="tile"><div class="label">Max combo</div><div class="value" id="tile-max-combo">-</div></div>
-      <div class="tile"><div class="label">Misses this play</div><div class="value" id="tile-misses">-</div></div>
-      <div class="tile"><div class="label">Best combo before a miss</div><div class="value" id="tile-best-combo">-</div></div>
-    </div>
-
     <div class="card">
       <h2>Note density vs judgment (this play)</h2>
       <div class="key-row" style="margin-bottom:12px">
         <label style="width:auto">Show:</label>
         <select id="density-type-selector" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--page);color:var(--text-primary);font-size:13px">
-          <option value="miss">Misses</option>
-          <option value="katu">200s (good)</option>
-          <option value="100">100s</option>
-          <option value="50">50s</option>
+          <option value="miss" style="color:var(--series-8)">Misses</option>
+          <option value="katu" style="color:var(--series-3)">200s (good)</option>
+          <option value="100" style="color:var(--series-5)">100s</option>
+          <option value="50" style="color:var(--series-9)">50s</option>
         </select>
       </div>
       <div id="density-chart"></div>
     </div>
 
+    <div class="tiles">
+      <div class="tile"><div class="label">Accuracy</div><div class="value" id="tile-accuracy">-</div></div>
+      <div class="tile"><div class="label">Max combo</div><div class="value" id="tile-max-combo">-</div></div>
+      <div class="tile"><div class="label">Misses this play</div><div class="value" id="tile-misses">-</div></div>
+      <div class="tile"><div class="label">Timing bias</div><div class="value" id="tile-timing-bias">-</div></div>
+      <div class="tile"><div class="label">Unstable Rate</div><div class="value" id="tile-ur">-</div></div>
+    </div>
+
     <div class="card">
       <h2>Note density vs accuracy (this play)</h2>
       <div id="accuracy-chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Timing accuracy - early vs late (this play)</h2>
+      <div id="hit-error-chart"></div>
     </div>
 
     <div class="card">
@@ -131,11 +140,22 @@ async function load() {
   document.getElementById("tile-accuracy").textContent = data.play.accuracy != null ? data.play.accuracy.toFixed(2) + "%" : "-";
   document.getElementById("tile-max-combo").textContent = data.play.max_combo ?? "-";
   document.getElementById("tile-misses").textContent = data.misses.length;
-  const combos = data.misses.map(m => m.combo_before_miss).filter(c => c != null);
-  document.getElementById("tile-best-combo").textContent = combos.length ? Math.max(...combos) : "-";
+
+  const errors = (data.hit_errors || []).map(h => h.error_ms).filter(v => v != null);
+  if (errors.length) {
+    const mean = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const variance = errors.reduce((a, b) => a + (b - mean) ** 2, 0) / errors.length;
+    document.getElementById("tile-timing-bias").textContent =
+      Math.abs(mean) < 0.5 ? "On time" : (mean > 0 ? `+${mean.toFixed(1)}ms late` : `${mean.toFixed(1)}ms early`);
+    document.getElementById("tile-ur").textContent = (Math.sqrt(variance) * 10).toFixed(1);
+  } else {
+    document.getElementById("tile-timing-bias").textContent = "-";
+    document.getElementById("tile-ur").textContent = "-";
+  }
 
   renderSelectedDensityChart();
   renderAccuracyChart(document.getElementById("accuracy-chart"), data.density, data.judgments);
+  renderHitErrorChart(document.getElementById("hit-error-chart"), data.hit_errors);
   renderFingerBars(document.getElementById("chart-finger"), data.misses);
   renderMissTable(document.querySelector("#table-misses tbody"), data.misses);
 }
@@ -143,5 +163,6 @@ async function load() {
 load();
 setInterval(load, 2000);
 </script>
+<script src="/static/theme.js"></script>
 </body>
 </html>
