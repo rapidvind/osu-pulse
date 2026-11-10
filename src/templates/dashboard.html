@@ -57,7 +57,7 @@
       <summary style="cursor:pointer;font-size:14px;font-weight:600">Key settings</summary>
       <div class="sub" style="margin-top:12px">
         Must match your actual in-game osu!mania keybinds (Options &gt; Input &gt; osu!mania Bindings).
-        Order matters — left to right here should match column 1 to 4 in-game. Takes effect immediately, no restart needed.
+        Order matters: left to right here should match column 1 to 4 in-game. Takes effect immediately, no restart needed.
       </div>
       <div id="key-settings-rows"></div>
       <div class="button-row" style="margin-top:4px;margin-bottom:0">
@@ -302,7 +302,7 @@ async function saveKeySettings() {
       return;
     }
     renderKeySettings(data.key_to_finger);
-    msg.textContent = "Saved — takes effect immediately.";
+    msg.textContent = "Saved, takes effect immediately.";
     msg.style.color = "var(--series-6)";
   } catch (e) {
     msg.textContent = "Could not reach the server.";
